@@ -1,0 +1,1 @@
+{"SecurityGroupId": "sg-049ba7ce2d69eef3f", "KeyPairId": "key-0f7e5a11d983ccdcc", "EC2InstanceIds": ["i-096152b2937bb3dfc", "i-0d29c611307f6416a", "i-0963adc41ed131cae", "i-08d9c562248f6e873", "i-0da645ab7f15630bb", "i-0d6843e569d4ec27b"], "EC2InstancePublicIPv4Address": ["52.54.133.176", "184.72.74.229", "34.229.17.212", "34.235.89.183", "54.226.223.208", "18.212.76.71"]}

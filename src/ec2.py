@@ -72,6 +72,24 @@ def set_security_group_inbound_rules(ec2: EC2Client, security_group_id: str) -> 
                  'ToPort': 80,
                  'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
                  },
+                {'IpProtocol': 'tcp', # Type: HTTPS
+                 'FromPort': 443,
+                 'ToPort': 443,
+                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                 },
+                {'IpProtocol': 'tcp',
+                 'FromPort': 1186,
+                 'ToPort': 1186,
+                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                 },
+                {'IpProtocol': 'icmp',
+                 'FromPort': -1,
+                 'ToPort': -1,
+                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                 },
+                {'IpProtocol': '-1',
+                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                 },
             ]
         )
     except Exception as e:
@@ -289,3 +307,31 @@ def get_ec2_instance_public_ipv4_address(ec2: EC2Client, ec2_instance_id: str) -
         ec2_instance_public_ipv4_address = response['Reservations'][0]['Instances'][0]['PublicIpAddress']
         print(f'EC2 instance public ipv4 address obtained successfully.\n{ec2_instance_public_ipv4_address}')
         return ec2_instance_public_ipv4_address
+
+
+def get_ec2_instance_private_ipv4_dns_name(ec2: EC2Client, ec2_instance_id: str) -> str:
+    """
+    get the EC2 instance's public IPv4 address
+
+    :param ec2: EC2 Client
+    :param ec2_instance_id: EC2 instance id
+    :return: EC2 instance public IPv4 address
+    """
+
+    try:
+        print('Getting ec2 instance public ipv4 address...')
+        response = ec2.describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-id',
+                    'Values': [ec2_instance_id],
+                }
+            ]
+        )
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+    else:
+        ec2_instance_private_dns_name = response['Reservations'][0]['Instances'][0]['PrivateDnsName']
+        print(f'EC2 instance private dns name obtained successfully.\n{ec2_instance_private_dns_name}')
+        return ec2_instance_private_dns_name

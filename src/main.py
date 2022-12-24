@@ -7,8 +7,7 @@ from ssh_run_command import *
 
 def main() -> None:
     """
-    this function runs the whole experience : creates and configures the AWS EC2 instances and runs the map reduce experiences
-    (WordCount and Social Network)
+    this function runs the whole experience : creates and configures the AWS EC2 instances and runs
     """
     ###################################################################################################################
     #                                    Setting program arguments
@@ -26,11 +25,19 @@ def main() -> None:
     sub_parser = parser.add_subparsers(title='aws arguments', dest='AWS')
     aws_parser = sub_parser.add_parser('aws')
 
-    parser.add_argument('-r', '--reset', help="reset user's aws account.", dest='RESET', required=False, action='store_true')
-    aws_parser.add_argument('-g', '--region', help='region name for your AWS account.', dest='AWS_REGION_NAME', required=True, nargs=1)
-    aws_parser.add_argument('-i', '--id', help='access key for your AWS account.', dest='AWS_ACCESS_KEY_ID', required=True, nargs=1)
-    aws_parser.add_argument('-s', '--secret', help='secret key for your AWS account.', dest='AWS_SECRET_ACCESS_KEY', required=True, nargs=1)
-    aws_parser.add_argument('-t', '--token', help='session key for your AWS account.', dest='AWS_SESSION_TOKEN', required=True, nargs=1)
+    parser.add_argument('-r', '--reset', help="reset user's aws account.", dest='RESET', required=False,
+                        action='store_true')
+
+    parser.add_argument('-m', '--mode', help="", dest='MODE', required=False, default="direct")
+
+    aws_parser.add_argument('-g', '--region', help='region name for your AWS account.', dest='AWS_REGION_NAME',
+                            required=True, nargs=1)
+    aws_parser.add_argument('-i', '--id', help='access key for your AWS account.', dest='AWS_ACCESS_KEY_ID',
+                            required=True, nargs=1)
+    aws_parser.add_argument('-s', '--secret', help='secret key for your AWS account.', dest='AWS_SECRET_ACCESS_KEY',
+                            required=True, nargs=1)
+    aws_parser.add_argument('-t', '--token', help='session key for your AWS account.', dest='AWS_SESSION_TOKEN',
+                            required=True, nargs=1)
 
     args = parser.parse_args()
 
@@ -88,21 +95,37 @@ def main() -> None:
     # Save key pair id to aws_data (needed to reset aws account)
     aws_data['KeyPairId'] = key_pair_id
 
-    # Create one instance of m4.large running linux ubuntu
-    instance_tag_id = "1"
-    ec2_instance_id = launch_ec2_instance(ec2, EC2_CONFIG['Common'] | EC2_CONFIG['Cluster1'], instance_tag_id)
+    # Create 5 instances of t2.micro for Cluster 1
+    ec2_instance_ids_1 = []
+    for instance_tag_id in range(1, 6):
+        ec2_instance_ids_1.append(
+            launch_ec2_instance(ec2, EC2_CONFIG['Common'] | EC2_CONFIG['Cluster1'], str(instance_tag_id))
+        )
 
-    # Save ec2 instance id to aws_data (needed to reset aws account)
-    aws_data['EC2InstanceIds'] = [ec2_instance_id]
+    ec2_instance_ids_2 = []
+    for instance_tag_id in range(1, 2):
+        ec2_instance_ids_2.append(
+            launch_ec2_instance(ec2, EC2_CONFIG['Common'] | EC2_CONFIG['Cluster2'], str(instance_tag_id))
+        )
 
-    # Wait until all ec2 instance state pass to 'running'
-    wait_until_all_ec2_instance_are_running(ec2, [ec2_instance_id])
+    # Save ec2 instance ids to aws_data (needed to reset aws account)
+    aws_data['EC2InstanceIds'] = ec2_instance_ids_1 + ec2_instance_ids_2
+
+    # Wait until all ec2 instance states pass to 'running'
+    wait_until_all_ec2_instance_are_running(ec2, ec2_instance_ids_1 + ec2_instance_ids_2)
 
     # Get ec2 instance public ipv4 address
-    ec2_instance_public_ipv4_address = get_ec2_instance_public_ipv4_address(ec2, ec2_instance_id)
+    ec2_instance_public_ipv4_addresses = []
+    for ec2_instance_id in ec2_instance_ids_1 + ec2_instance_ids_2:
+        ec2_instance_public_ipv4_addresses.append(get_ec2_instance_public_ipv4_address(ec2, ec2_instance_id))
+
+    # Get ec2 instance private dns name
+    ec2_instance_private_dns_name = []
+    for ec2_instance_id in ec2_instance_ids_1 + ec2_instance_ids_2:
+        ec2_instance_private_dns_name.append(get_ec2_instance_private_ipv4_dns_name(ec2, ec2_instance_id))
 
     # Save ec2 instance public ipv4 address to aws_data (needed to connect to it via ssh)
-    aws_data['EC2InstancePublicIPv4Address'] = ec2_instance_public_ipv4_address
+    aws_data['EC2InstancePublicIPv4Address'] = ec2_instance_public_ipv4_addresses
 
     # Export aws_data to aws_data.json file (needed to execute -r/--reset command)
     save_aws_data(aws_data, 'aws_data.json')
@@ -111,8 +134,20 @@ def main() -> None:
     #                                    Running commands via SSH
     ###################################################################################################################
 
-    # Copy the necessary files and run setup.sh on the created EC2 instance
-    ssh_run_commands(ec2_instance_public_ipv4_address)
+    # Running and benchmarking MySQL stand alone
+    ssh_run_stand_alone(ec2_instance_public_ipv4_addresses[0])
+
+    # Configuring the node manager
+    ssh_run_node_manager(ec2_instance_public_ipv4_addresses[1], ec2_instance_private_dns_name[1:5])
+
+    # Configuring the data nodes
+    ssh_run_data_nodes(ec2_instance_public_ipv4_addresses[2:5], ec2_instance_private_dns_name[1])
+
+    # Running and benchmarking MySQL cluster
+    ssh_run_sql_node(ec2_instance_public_ipv4_addresses[1], ec2_instance_private_dns_name[1])
+
+    # Running the Proxy Design Pattern
+    ssh_run_proxy(ec2_instance_public_ipv4_addresses[5], ec2_instance_public_ipv4_addresses[1:5], args.MODE)
 
 
 def save_aws_data(aws_data: dict, path: str) -> None:
